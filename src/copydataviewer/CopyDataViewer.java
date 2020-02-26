@@ -2,16 +2,15 @@ package copydataviewer;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
+import copydataviewer.util.SystemUtil;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import util.copyDataViewer.SystemUtil;
+import lombok.NoArgsConstructor;
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
 
 /** 
  * Visualiseur de données au format fixe (Cobol)
@@ -28,100 +27,70 @@ import util.copyDataViewer.SystemUtil;
 public class CopyDataViewer {
 
 	private static final String CSV_SEP = ";";
-	private static final String LINE_SEP = "\r";
-	private static final Pattern COPY_DECLARATION = Pattern
-			.compile("[0-9]+\\s+(.+)\\s+PIC\\s+.+\\(([0-9]+)\\)\\s*\\.");
-	private static final Pattern LINE_SEP_PATTERN = Pattern.compile("[\\r\\n]+");
 
 	public static void main(String[] args) throws IOException {
 
-		String copyContent = SystemUtil.getFileContent(Paths.get(args[0]));
-		String dataContent = SystemUtil.getFileContent(Paths.get(args[1]));
+		Params params = getParams(args);
 
-		List<CopyField> copyFields = getFieldsLength(copyContent);
-		String newDataContent = getDatasWithSepAndTitle(dataContent, copyFields, CSV_SEP);
+		if (params != null) {
 
-		SystemUtil.writeFileWithContent(args[1] + ".csv", newDataContent);
+			String copyContent = SystemUtil.getFileContent(Paths.get(params.getCopy()));
+			String dataContent = SystemUtil.getFileContent(Paths.get(params.getData()));
+
+			DataFormatter dataFormatter = new DataFormatter(params.getSep() == null ? CSV_SEP : params.getSep());
+			var newDataContent = dataFormatter.format(copyContent, dataContent);
+			SystemUtil.writeFileWithContent(params.getRes() == null ? params.getData() + ".csv" : params.getRes(), newDataContent);
+		}
 	}
 
-//	private static String listToString(List<String> list, String sep) {
-//		return streamToString(list.stream(), sep);
-//	}
 
-	private static String streamToString(Stream<String> stream, String sep) {
-		return stream.collect(Collectors.joining(sep));
+	
+	/**
+	 * Analyse des arguments passés au programme
+	 */
+	public static Params getParams(String[] args) {
+		Params params = null;
+		ArgumentParser parser = ArgumentParsers.newFor("CopyDataViewer").build()
+				.description("Formate un fichier de donnees à l'aide d'une copy Cobol");
+		parser.addArgument("-copy")
+				.dest("copy").metavar("fichier copy")
+				.type(String.class)
+				.required(true)
+				.help("chemin du fichier copy");
+		
+		parser.addArgument("-data")
+				.dest("data").metavar("fichier de donnees")
+				.type(String.class)
+				.required(true)
+				.help("Chemin du fichier de donnees");
+		
+		parser.addArgument("-res")
+				.dest("res").metavar("nom fichier resultat")
+				.type(String.class)
+				.required(false)
+				.help("Chemin fichier resultat (nom du fichier de donnees suffixe par .csv par defaut)");
+
+		parser.addArgument("-sep").dest("sep").metavar("separateur pour le fichier CSV").type(String.class)
+				.required(false).help("Separateur pour le fichier CSV (';' par defaut)");
+		
+		try {
+			Namespace res = parser.parseArgs(args);
+			params = new Params(res.get("copy"), res.get("data"), res.get("res"), res.get("sep"));
+		} catch (ArgumentParserException e) {
+			parser.handleError(e);
+		}
+
+		return params;
 	}
 
 	@Data
 	@AllArgsConstructor
-	private static class CopyField {
-		String name;
-		int length;
-	}
-
-	/**
-	 * Transformation de chaque ligne des données d'entrée (data) en ligne de champs
-	 * séparés par le séparateur spécifié (sep) grâce au format de la copy
-	 * (copyFields)
-	 */
-	private static String getDatasWithSepAndTitle(String data, List<CopyField> copyFields, String sep) {
-		StringBuilder dataWithSepAndTitle = new StringBuilder();
-		dataWithSepAndTitle
-				.append(streamToString(copyFields.stream().map(c -> c.getName() + " (" + c.getLength() + ")"), sep));
-		dataWithSepAndTitle.append(LINE_SEP);
-		List<String> dataLines = SystemUtil.splitContent(data, LINE_SEP_PATTERN);
-
-		// Parcours des lignes de données
-		for (String line : dataLines) {
-			StringBuilder sb = new StringBuilder();
-			int startIdx = 0;
-			int endIdx = 0;
-			// Découpage de chaque ligne suivant les champs de la copy
-			for (CopyField copyField : copyFields) {
-				// endIdx prend la valeur de la longueur du champ de la copie
-				endIdx = startIdx + copyField.getLength();
-				// Si enddIdx dépasse la longueur il est ramené à la longueur de la ligne
-				if (line.length() < startIdx + copyField.getLength()) {
-					endIdx = line.length();
-				}
-				// Si startIdx n'est pas supérieur à la longueur de la ligne alors ajout du
-				// champ (de startIdx à endIdx) suivi d'un séparateur
-				if (startIdx < line.length()) {
-					sb.append(line.substring(startIdx, endIdx));
-					sb.append(sep);
-				}
-				// startIdx prend la valeur de la longueur du champ qui vient d'être ajouté pour
-				// repartir au champ suivant
-				startIdx += copyField.getLength();
-			}
-
-			// Si tous les champs de la copy ont été ajoutés et qu'il reste des données
-			// alors on les ajoutes à la fin
-			if (endIdx < line.length()) {
-				sb.append(line.substring(endIdx));
-			}
-
-			// Ajout de la ligne formatée en CSV
-			dataWithSepAndTitle.append(sb).append(LINE_SEP);
-		}
-
-		return dataWithSepAndTitle.toString();
-	}
-
-	/**
-	 * Construction de la liste des champs avec leur longueur à partir du contenu
-	 * d'un fichier copy
-	 */
-	private static List<CopyField> getFieldsLength(String copyContent) {
-		List<CopyField> copyFields = new ArrayList<>();
-		Matcher matcher = COPY_DECLARATION.matcher(copyContent);
-		// Parcours des déclarations des champs de la copy
-		while (matcher.find()) {
-			var fieldName = matcher.group(1);
-			var fieldLength = matcher.group(2);
-			copyFields.add(new CopyField(fieldName, Integer.parseInt(fieldLength)));
-		}
-		return copyFields;
+	@NoArgsConstructor
+	public static class Params {
+		String copy;
+		String data;
+		String res;
+		String sep;
 	}
 
 }
