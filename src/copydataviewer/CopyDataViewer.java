@@ -1,5 +1,7 @@
 package copydataviewer;
 
+import java.awt.Desktop;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
 
@@ -8,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -39,7 +42,12 @@ public class CopyDataViewer {
 
 			DataFormatter dataFormatter = new DataFormatter(params.getSep() == null ? CSV_SEP : params.getSep());
 			var newDataContent = dataFormatter.format(copyContent, dataContent);
-			SystemUtil.writeFileWithContent(params.getRes() == null ? params.getData() + ".csv" : params.getRes(), newDataContent);
+			String resultFileName = params.getRes() == null ? params.getData() + ".csv" : params.getRes();
+			SystemUtil.writeFileWithContent(resultFileName, newDataContent);
+
+			if (params.getOpen() != null && params.getOpen()) {
+				Desktop.getDesktop().open(new File(resultFileName));
+			}
 		}
 	}
 
@@ -70,12 +78,20 @@ public class CopyDataViewer {
 				.required(false)
 				.help("Chemin fichier resultat (nom du fichier de donnees suffixe par .csv par defaut)");
 
-		parser.addArgument("-sep").dest("sep").metavar("separateur pour le fichier CSV").type(String.class)
-				.required(false).help("Separateur pour le fichier CSV (';' par defaut)");
+		parser.addArgument("-sep")
+				.dest("sep").metavar("separateur pour le fichier CSV")
+				.type(String.class)
+				.required(false)
+				.help("Separateur pour le fichier CSV (';' par defaut)");
+		
+		parser.addArgument("-open").dest("open").metavar("lancement du programme de visualisation par defaut")
+				.required(false)
+				.action(Arguments.storeTrue())
+				.help("Lancement du programme de visualisation par défaut (excel generalement) avec le fichier CSV en paramètre (true/false, false par defaut)");
 		
 		try {
 			Namespace res = parser.parseArgs(args);
-			params = new Params(res.get("copy"), res.get("data"), res.get("res"), res.get("sep"));
+			params = new Params(res.get("copy"), res.get("data"), res.get("res"), res.get("sep"), res.get("open"));
 		} catch (ArgumentParserException e) {
 			parser.handleError(e);
 		}
@@ -91,6 +107,7 @@ public class CopyDataViewer {
 		String data;
 		String res;
 		String sep;
+		Boolean open;
 	}
 
 }
