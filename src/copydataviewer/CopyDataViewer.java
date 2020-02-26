@@ -64,7 +64,7 @@ public class CopyDataViewer {
 				.dest("copy").metavar("fichier copy")
 				.type(String.class)
 				.required(true)
-				.help("chemin du fichier copy");
+				.help("Chemin du fichier copy");
 		
 		parser.addArgument("-data")
 				.dest("data").metavar("fichier de donnees")
