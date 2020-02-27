@@ -87,7 +87,7 @@ public class CopyDataViewer {
 		parser.addArgument("-open").dest("open").metavar("lancement du programme de visualisation par defaut")
 				.required(false)
 				.action(Arguments.storeTrue())
-				.help("Lancement du programme de visualisation par défaut (excel generalement) avec le fichier CSV en paramètre (true/false, false par defaut)");
+				.help("Lancement du programme de visualisation par défaut (excel generalement) avec le fichier CSV en paramètre");
 		
 		try {
 			Namespace res = parser.parseArgs(args);
